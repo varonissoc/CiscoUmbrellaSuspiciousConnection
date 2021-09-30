@@ -1,0 +1,75 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/862d9ae9-7745-4af9-89a8-8f743fd6b67b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/862d9ae9-7745-4af9-89a8-8f743fd6b67b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2021-03-01-preview",
+            "properties": {
+                "displayName": "Cisco Umbrella - Suspicious Connection",
+                "description": "",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let CiscoThreats = Cisco_Umbrella_Threats_CL\r\n    | where TimeGenerated >= ago(10m)\r\n    | where domain_s !in (\"epicunitscan.info\")\r\n    | where VT_Score_d !in (\"0\")\r\n    | extend Domain = iff(isnotempty(url_s),iff(url_s startswith \"http\", split(url_s, 'https://').[1], url_s),domain_s)\r\n    | extend Domain = iff(Domain contains \"/\", split(Domain, '/').[0], Domain)\r\n    | extend Domain = split(Domain, '.')\r\n    | extend Domain = iff(Domain[-1] == \"il\", tostring(strcat(Domain[-3], '.', Domain[-2], '.', Domain[-1])), tostring(strcat(Domain[-2], '.', Domain[-1])))\r\n    | project VT_Link_s, VT_Score_d, Domain, referer_s;\r\nFW_Solution_CL\r\n| where TimeGenerated >= ago(30m)\r\n| extend Domain = split(split(split(RequestURL, '\"').[1], '/').[0], '.') \r\n| extend Domain = iff(Domain[-1] == \"il\", tostring(strcat(Domain[-3], '.', Domain[-2], '.', Domain[-1])), tostring(strcat(Domain[-2], '.', Domain[-1])))\r\n| distinct SourceIP, Domain, DeviceAction\r\n| join kind=inner CiscoThreats on $left.Domain == $right.Domain",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT6H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "IP"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "VTScore": "VT_Score_d",
+                    "VTLink": "VT_Link_s"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "Domain"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

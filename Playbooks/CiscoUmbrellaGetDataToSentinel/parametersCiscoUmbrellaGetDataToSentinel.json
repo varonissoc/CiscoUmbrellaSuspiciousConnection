@@ -1,0 +1,15 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_Cisco_Umbrella_Data_Hackathon_name": {
+            "value": null
+        },
+        "connections_azureblob_3_externalid": {
+            "value": null
+        },
+        "connections_azureloganalyticsdatacollector_6_externalid": {
+            "value": null
+        }
+    }
+}

@@ -1,0 +1,27 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_Cisco_Umbrella_Hackathon_name": {
+            "value": null
+        },
+        "connections_azuremonitorlogs_2_externalid": {
+            "value": null
+        },
+        "connections_azuresentinel_2_externalid": {
+            "value": null
+        },
+        "connections_office365_11_externalid": {
+            "value": null
+        },
+        "connections_teams_externalid": {
+            "value": null
+        },
+        "connections_virustotal_externalid": {
+            "value": null
+        },
+        "connections_wdatp_1_externalid": {
+            "value": null
+        }
+    }
+}

@@ -1,0 +1,527 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_Cisco_Umbrella_Data_Hackathon_name": {
+            "defaultValue": "Cisco_Umbrella_Data_Hackathon",
+            "type": "String"
+        },
+        "connections_azureblob_3_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/azureblob-3",
+            "type": "String"
+        },
+        "connections_azureloganalyticsdatacollector_6_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/azureloganalyticsdatacollector-6",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_Cisco_Umbrella_Data_Hackathon_name')]",
+            "location": "westeurope",
+            "tags": {
+                "Owner": "SOC Team"
+            },
+            "identity": {
+                "principalId": "<principle id>",
+                "tenantId": "<tenant id>",
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 10
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Minute",
+                                "interval": 10
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Access_Token": {
+                            "runAfter": {
+                                "CiscoUmbrellaAPISecret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('CiscoUmbrellaAPISecret')['value']",
+                                    "type": "Basic",
+                                    "username": "@body('CiscoUmbrellaAPIKeyNew')['value']"
+                                },
+                                "body": "grant_type=client_credentials",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "https://management.api.umbrella.com/auth/v2/oauth2/token"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Blob_for_Cisco_Umbrella_Query_Time": {
+                            "runAfter": {
+                                "CiscoUmbrellaTenantID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Blob for Cisco Umbrella Query Time",
+                                        "type": "string",
+                                        "value": "Blob should contain something like:  2021-09-30T14:51:11.5870556Z"
+                                    }
+                                ]
+                            }
+                        },
+                        "CiscoUmbrellaAPIKeyNew": {
+                            "runAfter": {
+                                "VTKey": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://vault.azure.net",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2016-10-01"
+                                },
+                                "uri": "@variables('CiscoUmbrellaAPIKeyLink')"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "CiscoUmbrellaAPISecret": {
+                            "runAfter": {
+                                "CiscoUmbrellaAPIKeyNew": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://vault.azure.net",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2016-10-01"
+                                },
+                                "uri": "@variables('CiscoUmbrellaAPISecretLink')"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "CiscoUmbrellaTenantID": {
+                            "runAfter": {
+                                "Exclude_legit_domains_here_from_query_VT": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "CiscoUmbrellaTenantID",
+                                        "type": "string",
+                                        "value": "Add your company ID on Cisco Umbrella here"
+                                    }
+                                ]
+                            }
+                        },
+                        "Cisco_Umbrella_API_Key": {
+                            "runAfter": {
+                                "Blob_for_Cisco_Umbrella_Query_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "CiscoUmbrellaAPIKeyLink",
+                                        "type": "string",
+                                        "value": "Key Vault link to CiscoUmbrellaAPIKey"
+                                    }
+                                ]
+                            }
+                        },
+                        "Cisco_Umbrella_API_Secret": {
+                            "runAfter": {
+                                "Cisco_Umbrella_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "CiscoUmbrellaAPISecretLink",
+                                        "type": "string",
+                                        "value": "Key Vault link to CiscoUmbrellaAPISecret"
+                                    }
+                                ]
+                            }
+                        },
+                        "Exclude_legit_domains_here_from_query_VT": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Exclude",
+                                        "type": "array",
+                                        "value": [
+                                            "",
+                                            ""
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@outputs('HTTP_4')['body']['data']",
+                            "actions": {
+                                "AddProperty": {
+                                    "runAfter": {
+                                        "Condition_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@addProperty(items('For_each'),'VT_Score',outputs('VT_Score'))"
+                                },
+                                "AddProperty2": {
+                                    "runAfter": {
+                                        "AddProperty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@addProperty(outputs('AddProperty'),'VT_Link',outputs('VT_Link'))"
+                                },
+                                "Condition_3": {
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Condition_2": {
+                                                    "actions": {
+                                                        "VT_Link": {
+                                                            "runAfter": {
+                                                                "VT_Score": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Compose",
+                                                            "inputs": "@if(contains(outputs('VTReport')['body'],'permalink'),outputs('VTReport')['body']['permalink'],null)"
+                                                        },
+                                                        "VT_Score": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": "@if(contains(outputs('VTReport')['body'],'positives'),outputs('VTReport')['body']['positives'],null)"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Delay": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "contains": [
+                                                                    "@outputs('VTReport')",
+                                                                    "body"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Delay": {
+                                                    "runAfter": {
+                                                        "VTReport": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Wait",
+                                                    "inputs": {
+                                                        "interval": {
+                                                            "count": 20,
+                                                            "unit": "Second"
+                                                        }
+                                                    }
+                                                },
+                                                "VTReport": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "method": "GET",
+                                                        "uri": "https://www.virustotal.com/vtapi/v2/url/report?apikey=@{body('VTKey')['value']}&resource=@{items('For_each')['domain']}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@variables('Exclude')",
+                                                                "@items('For_each')['domain']"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@items('For_each')",
+                                                    "domain"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Send_Data": {
+                                    "runAfter": {
+                                        "AddProperty2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{outputs('AddProperty2')}",
+                                        "headers": {
+                                            "Log-Type": "Cisco_Umbrella_Threats",
+                                            "time-generated-field": "@{utcNow()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_blob_content": {
+                            "runAfter": {
+                                "Cisco_Umbrella_API_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "JTJmY2lzb3NvY3R0aW1lc3RhbXBzJTJmQ2lzY28rVW1icmVsbGErVGltZS50eHQ=": "/cisosocttimestamps/Cisco Umbrella Time.txt"
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent(variables('Blob for Cisco Umbrella Query Time')))}/content",
+                                "queries": {
+                                    "inferContentType": true
+                                }
+                            }
+                        },
+                        "HTTP_4": {
+                            "runAfter": {
+                                "UNIX_Time_(To)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "Bearer @{outputs('Token')}",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "uri": "https://reports.api.umbrella.com/v2/organizations/@{variables('CiscoUmbrellaTenantID')}/activity?categories=65%2C64%2C66%2C67%2C68%2C109&filternoisydomains=true&from=@{outputs('UNIX_Time_(From)')}&to=@{outputs('UNIX_Time_(To)')}&limit=5000&order=desc&offset=0"
+                            }
+                        },
+                        "Initialize_variable_2": {
+                            "runAfter": {
+                                "Get_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Key Vault link to VTKey",
+                                        "type": "string",
+                                        "value": "***https://***"
+                                    }
+                                ]
+                            }
+                        },
+                        "Token": {
+                            "runAfter": {
+                                "Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@outputs('Access_Token')['body']['access_token']"
+                        },
+                        "UNIX_Time_(From)": {
+                            "runAfter": {
+                                "Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@div(sub(ticks(body('Get_blob_content')),ticks('1970-01-01')), 10000)",
+                            "description": "Convert the last run time to UNIX"
+                        },
+                        "UNIX_Time_(To)": {
+                            "runAfter": {
+                                "UTC_(now)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@div(sub(ticks(outputs('UTC_(now)')),ticks('1970-01-01')), 10000)",
+                            "description": "Convert the time now to UNIX"
+                        },
+                        "UTC_(now)": {
+                            "runAfter": {
+                                "UNIX_Time_(From)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@utcNow()",
+                            "description": "For next run"
+                        },
+                        "Update_blob": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "JTJmY2lzb3NvY3R0aW1lc3RhbXBzJTJmQ2lzY28rVW1icmVsbGErVGltZS50eHQ=": "/cisosocttimestamps/Cisco Umbrella Time.txt"
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@outputs('UTC_(now)')",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent(variables('Blob for Cisco Umbrella Query Time')))}"
+                            }
+                        },
+                        "VTKey": {
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://vault.azure.net",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2016-10-01"
+                                },
+                                "uri": "@variables('Key Vault link to VTKey')"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob": {
+                                "connectionId": "[parameters('connections_azureblob_3_externalid')]",
+                                "connectionName": "azureblob-3",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/westeurope/managedApis/azureblob"
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[parameters('connections_azureloganalyticsdatacollector_6_externalid')]",
+                                "connectionName": "azureloganalyticsdatacollector-6",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/westeurope/managedApis/azureloganalyticsdatacollector"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

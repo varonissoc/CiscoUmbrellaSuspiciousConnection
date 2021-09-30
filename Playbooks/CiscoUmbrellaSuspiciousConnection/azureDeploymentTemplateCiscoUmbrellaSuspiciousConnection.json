@@ -1,0 +1,1089 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_Cisco_Umbrella_Hackathon_name": {
+            "defaultValue": "Cisco_Umbrella_Hackathon",
+            "type": "String"
+        },
+        "connections_azuremonitorlogs_2_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/azuremonitorlogs-2",
+            "type": "String"
+        },
+        "connections_azuresentinel_2_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/azuresentinel-2",
+            "type": "String"
+        },
+        "connections_office365_11_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/office365-11",
+            "type": "String"
+        },
+        "connections_teams_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/teams",
+            "type": "String"
+        },
+        "connections_virustotal_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/virustotal",
+            "type": "String"
+        },
+        "connections_wdatp_1_externalid": {
+            "defaultValue": "/subscriptions/<subscription id>/resourceGroups/<resource group>/providers/Microsoft.Web/connections/wdatp-1",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_Cisco_Umbrella_Hackathon_name')]",
+            "location": "eastus",
+            "tags": {
+                "Owner": "SOC Team"
+            },
+            "identity": {
+                "principalId": "<principle id>",
+                "tenantId": "<tenant id>",
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Actions_-_Start_automated_investigation_on_a_machine": {
+                            "runAfter": {
+                                "Broken_RequestURL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Comment": "Suspicious connection to @{outputs('Broken_RequestURL')}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/machines/@{encodeURIComponent(outputs('Run_query_and_list_results')['body']['value'][0]['DeviceId'])}/startInvestigation"
+                            },
+                            "description": "Initiate automated investigation on affected machine "
+                        },
+                        "Advanced_Hunting": {
+                            "runAfter": {
+                                "Run_query_and_list_results_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Query": "let selectedEventTimestamp = datetime(@{outputs('Run_query_and_list_results_5')['body']['value'][0]['TimeGenerated']});\nsearch in (DeviceFileEvents, DeviceProcessEvents, DeviceEvents, DeviceRegistryEvents, DeviceNetworkEvents, DeviceImageLoadEvents, DeviceLogonEvents)\n    Timestamp between ((selectedEventTimestamp - 5m) .. (selectedEventTimestamp + 5m))\n    and DeviceId == \"@{outputs('Run_query_and_list_results')['body']['value'][0]['DeviceId']}\"\n| sort by Timestamp desc\n| extend Relevance = iff(Timestamp == selectedEventTimestamp, \"Selected event\", iff(Timestamp < selectedEventTimestamp, \"Earlier event\", \"Later event\"))\n| project-reorder Relevance"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/advancedqueries/run"
+                            },
+                            "description": "Related events for the connection attempt to the suspicious URL"
+                        },
+                        "Broken_Domain": {
+                            "runAfter": {
+                                "Domain": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@replace(outputs('Domain'),'.','[.]')"
+                        },
+                        "Broken_RequestURL": {
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@replace(outputs('Run_query_and_list_results_2')['body']['value'][0]['RequestURL'],'.','[.]')"
+                        },
+                        "Comapny_Logo": {
+                            "runAfter": {
+                                "VTScore": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Comapny Logo",
+                                        "type": "string",
+                                        "value": "***Enter image link here***"
+                                    }
+                                ]
+                            }
+                        },
+                        "Company_Domain": {
+                            "runAfter": {
+                                "SOC_Team_Mailbox": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Company Domain",
+                                        "type": "string",
+                                        "value": "example.com"
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_2": {
+                            "actions": {
+                                "Update_incident_2": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "classification": {
+                                                "ClassificationAndReason": "BenignPositive - SuspiciousButExpected",
+                                                "ClassificationReasonText": "No threats were found from investigation "
+                                            },
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "ownerAction": "Unassign",
+                                            "severity": "Low",
+                                            "status": "Closed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Send_email_with_options": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Condition_4": {
+                                        "actions": {
+                                            "Condition_5": {
+                                                "actions": {
+                                                    "For_each_2": {
+                                                        "foreach": "@body('Run_query_and_list_results_3')?['value']",
+                                                        "actions": {
+                                                            "Compose": {
+                                                                "runAfter": {
+                                                                    "Create_HTML_table": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Compose",
+                                                                "inputs": "@replace(replace(replace(replace(body('Create_HTML_table'),'&lt;a','<a'),'&lt;/a&gt;','</a>'),'&amp;','&'),'&gt;','>')",
+                                                                "description": "Making links clickable"
+                                                            },
+                                                            "Compose_4": {
+                                                                "runAfter": {
+                                                                    "Compose": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Compose",
+                                                                "inputs": "<style>\nbody, p {font-family:\"Calibri\",sans-serif; font-size: 11pt}\ntable { background:white;border-collapse:collapse }\nth {border:solid white 1.0pt; background:#106EBE;padding:1.45pt 3.6pt 1.45pt 3.6pt; color: white}\ntd { border-top:none;border-left:none;border-bottom:solid white 1.0pt;border-right:solid white 1.0pt;padding:1.45pt 3.6pt 1.45pt 3.6pt;box-sizing: border-box }\na:link, span.MsoHyperlink {mso-style-priority:99; color:#0563C1; text-decoration:underline; }\na:visited, span.MsoHyperlinkFollowed {mso-style-priority:99; color:#954F72; text-decoration:underline;}\n</style>",
+                                                                "description": "Style for the table"
+                                                            },
+                                                            "Compose_5": {
+                                                                "runAfter": {
+                                                                    "Compose_4": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Compose",
+                                                                "inputs": "@replace(replace(replace(replace(string(variables('Recipients')),'[\"',''),'\"]',''),'\"',''),',',' ; ')",
+                                                                "description": "Listing recipients"
+                                                            },
+                                                            "Create_HTML_table": {
+                                                                "runAfter": {
+                                                                    "For_each_3": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Table",
+                                                                "inputs": {
+                                                                    "format": "HTML",
+                                                                    "from": "@body('Run_query_and_list_results_4')?['value']"
+                                                                }
+                                                            },
+                                                            "Delay": {
+                                                                "runAfter": {
+                                                                    "Send_an_email_(V2)": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Wait",
+                                                                "inputs": {
+                                                                    "interval": {
+                                                                        "count": 10,
+                                                                        "unit": "Second"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "For_each_3": {
+                                                                "foreach": "@body('Run_query_and_list_results_4')?['value']",
+                                                                "actions": {
+                                                                    "Append_to_array_variable": {
+                                                                        "runAfter": {},
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "Recipients",
+                                                                            "value": "@items('For_each_3')['RecipientEmailAddress']"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Run_query_and_list_results_4": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Foreach"
+                                                            },
+                                                            "For_each_5": {
+                                                                "foreach": "@if(contains(body('Post_adaptive_card_and_wait_for_a_response'),'data'),split(body('Post_adaptive_card_and_wait_for_a_response')['data']['Actions'], ','),array(''))",
+                                                                "actions": {
+                                                                    "SenderMailFromAddress": {
+                                                                        "runAfter": {},
+                                                                        "type": "Compose",
+                                                                        "inputs": "@items('For_each_2')['SenderMailFromAddress']"
+                                                                    },
+                                                                    "Subject": {
+                                                                        "runAfter": {
+                                                                            "SenderMailFromAddress": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "Compose",
+                                                                        "inputs": "@items('For_each_2')['Subject']"
+                                                                    },
+                                                                    "Switch": {
+                                                                        "runAfter": {
+                                                                            "Subject": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "cases": {
+                                                                            "Case": {
+                                                                                "case": "Block Sender",
+                                                                                "actions": {
+                                                                                    "Mail_relay_solution": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "Compose",
+                                                                                        "inputs": "***In this action please make sure to add your Mail Relay Solution for blocking senders***"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "Case_2": {
+                                                                                "case": "Remove mails from users' mailboxes",
+                                                                                "actions": {
+                                                                                    "Delete_email_(V2)": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "ApiConnection",
+                                                                                        "inputs": {
+                                                                                            "host": {
+                                                                                                "connection": {
+                                                                                                    "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                                }
+                                                                                            },
+                                                                                            "method": "delete",
+                                                                                            "path": "/codeless/v1.0/me/messages/@{encodeURIComponent(items('For_each_2')['InternetMessageId'])}"
+                                                                                        }
+                                                                                    },
+                                                                                    "Send_an_email_(V2)_6": {
+                                                                                        "runAfter": {
+                                                                                            "Delete_email_(V2)": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "ApiConnection",
+                                                                                        "inputs": {
+                                                                                            "body": {
+                                                                                                "Body": "<p>The following mail was deleted:</p>\n<p><br></p>\n<ul>\n  <li>NetworkMessageId: @{items('For_each_2')['NetworkMessageId']}</li>\n  <li>Subject: @{outputs('Subject')}</li>\n  <li>Sender: @{outputs('SenderMailFromAddress')}</li>\n</ul>\n<p>Best regards,<br>\n<br>\n@{variables('Comapny Logo')}<span style=\"font-size: 14px\"><strong>Security Operations Center (SOC) Team</strong></span></p>",
+                                                                                                "Subject": "[Incident Id: @{triggerBody()?['object']?['properties']?['incidentNumber']}] Cisco Umbrella - Malicious activity: @{outputs('Broken_Domain')}",
+                                                                                                "To": "@variables('SOC Team Mailbox')"
+                                                                                            },
+                                                                                            "host": {
+                                                                                                "connection": {
+                                                                                                    "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                                }
+                                                                                            },
+                                                                                            "method": "post",
+                                                                                            "path": "/v2/Mail"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "Case_3": {
+                                                                                "case": "Inform Users",
+                                                                                "actions": {
+                                                                                    "For_each_4": {
+                                                                                        "foreach": "@variables('Recipients')",
+                                                                                        "actions": {
+                                                                                            "Send_an_email_(V2)_2": {
+                                                                                                "runAfter": {},
+                                                                                                "type": "ApiConnection",
+                                                                                                "inputs": {
+                                                                                                    "body": {
+                                                                                                        "Body": "<p>Hi,&nbsp;</p>\n<p>Please be informed, that Malicious/SPAM mail from suspicious sender was removed from your mailbox.<br>\n<br>\nPlease inform us in case you contacted the sender/clicked on the link/opened the attached file.<br>\n<br>\nNo further actions are required.</p>\n<ul>\n  <li>Sender: @{outputs('SenderMailFromAddress')}</li>\n  <li>Subject: @{outputs('Subject')}<br>\n</li>\n</ul>\n<p><br>\nBest regards,<br>\n<br>\n@{variables('Comapny Logo')}<span style=\"font-size: 14px\"><strong>Security Operations Center (SOC) Team</strong></span></p>",
+                                                                                                        "Subject": "[[Malicious/Spam mail removal]",
+                                                                                                        "To": "@{items('For_each_4')}"
+                                                                                                    },
+                                                                                                    "host": {
+                                                                                                        "connection": {
+                                                                                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "method": "post",
+                                                                                                    "path": "/v2/Mail"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "runAfter": {},
+                                                                                        "type": "Foreach"
+                                                                                    },
+                                                                                    "Send_an_email_(V2)_4": {
+                                                                                        "runAfter": {
+                                                                                            "For_each_4": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "ApiConnection",
+                                                                                        "inputs": {
+                                                                                            "body": {
+                                                                                                "Body": "<p>Hi,<br>\n<br>\nThe following users were notified for the email removal:<br>\n<br>\n@{outputs('Compose_5')}<br>\n<br>\nBest regards,<br>\n<br>\n@{variables('Comapny Logo')}<span style=\"font-size: 14px\"><strong>Security Operations Center (SOC) Team</strong></span></p>",
+                                                                                                "Subject": "[Incident Id: @{triggerBody()?['object']?['properties']?['incidentNumber']}] Cisco Umbrella - Malicious activity: @{outputs('Broken_Domain')}",
+                                                                                                "To": "@variables('SOC Team Mailbox')"
+                                                                                            },
+                                                                                            "host": {
+                                                                                                "connection": {
+                                                                                                    "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                                }
+                                                                                            },
+                                                                                            "method": "post",
+                                                                                            "path": "/v2/Mail"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "Case_4": {
+                                                                                "case": "Close Incident",
+                                                                                "actions": {
+                                                                                    "Send_an_email_(V2)_3": {
+                                                                                        "runAfter": {
+                                                                                            "Update_incident_4": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "ApiConnection",
+                                                                                        "inputs": {
+                                                                                            "body": {
+                                                                                                "Body": "<p>Hi,<br>\n<br>\nIncident: @{triggerBody()?['object']?['properties']?['incidentNumber']} is now closed.<br>\n<br>\n<br>\nBest regards,<br>\n<br>\n@{variables('Comapny Logo')}<span style=\"color: rgb(226,80,65)\"><strong>Security Operations Center (SOC) Team</strong></span></p>",
+                                                                                                "Subject": "[Incident Id: @{triggerBody()?['object']?['properties']?['incidentNumber']}] Cisco Umbrella - Malicious activity: @{outputs('Broken_Domain')}",
+                                                                                                "To": "@variables('SOC Team Mailbox')"
+                                                                                            },
+                                                                                            "host": {
+                                                                                                "connection": {
+                                                                                                    "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                                }
+                                                                                            },
+                                                                                            "method": "post",
+                                                                                            "path": "/v2/Mail"
+                                                                                        }
+                                                                                    },
+                                                                                    "Update_incident_4": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "ApiConnection",
+                                                                                        "inputs": {
+                                                                                            "body": {
+                                                                                                "classification": {
+                                                                                                    "ClassificationAndReason": "BenignPositive - SuspiciousButExpected",
+                                                                                                    "ClassificationReasonText": "No threats were found from investigation "
+                                                                                                },
+                                                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                                "severity": "Low",
+                                                                                                "status": "Closed"
+                                                                                            },
+                                                                                            "host": {
+                                                                                                "connection": {
+                                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                                }
+                                                                                            },
+                                                                                            "method": "put",
+                                                                                            "path": "/Incidents"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "default": {
+                                                                            "actions": {
+                                                                                "Send_an_email_(V2)_5": {
+                                                                                    "runAfter": {},
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "body": {
+                                                                                            "Body": "<p>You choose to not take any action on this activity</p>",
+                                                                                            "Subject": "[Incident Id: @{triggerBody()?['object']?['properties']?['incidentNumber']}] Cisco Umbrella - Malicious activity: @{outputs('Broken_Domain')}",
+                                                                                            "To": "@variables('SOC Team Mailbox')"
+                                                                                        },
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "path": "/v2/Mail"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": "@items('For_each_5')",
+                                                                        "type": "Switch"
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Post_adaptive_card_and_wait_for_a_response": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Foreach"
+                                                            },
+                                                            "Post_adaptive_card_and_wait_for_a_response": {
+                                                                "runAfter": {
+                                                                    "Delay": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ApiConnectionWebhook",
+                                                                "inputs": {
+                                                                    "body": {
+                                                                        "body": {
+                                                                            "messageBody": "{\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.2\",\n  \"body\": [\n {\n      \"type\": \"TextBlock\",\n      \"text\": \"Sender: @{items('For_each_2')['SenderMailFromAddress']}\"\n    },\n {\n      \"type\": \"TextBlock\",\n      \"text\": \"Recipients: @{outputs('Compose_5')}\"\n    },\n {\n      \"type\": \"TextBlock\",\n      \"text\": \"Subject: @{items('For_each_2')['Subject']}\"\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"Please choose actions to take:\"\n    },\n    {\n      \"type\": \"Input.ChoiceSet\",\n      \"id\": \"Actions\",\n      \"isMultiSelect\": true,\n      \"value\": \"1\",\n      \"style\": \"expanded\",\n      \"choices\": [\n        {\n          \"title\": \"Block Sender\",\n          \"value\": \"Block Sender\"\n        },\n        {\n          \"title\": \"Remove mails from users' mailboxes\",\n          \"value\": \"Remove mails from users' mailboxes\"\n        },\n        {\n          \"title\": \"Inform Users\",\n          \"value\": \"Inform Users\"\n        },\n {\n          \"title\": \"Close Incident\",\n          \"value\": \"Close Incident\"\n        }\n      ]\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"Action.Submit\",\n      \"title\": \"OK\"\n    }\n  ]\n}",
+                                                                            "recipient": {
+                                                                                "channelId": "19:3efa7993eb6247a998b7c970d922fb63@thread.skype",
+                                                                                "groupId": "f43bb615-3f38-4a6f-8729-9803c034216b"
+                                                                            },
+                                                                            "updateMessage": "Thanks for your response!"
+                                                                        },
+                                                                        "notificationUrl": "@{listCallbackUrl()}"
+                                                                    },
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                                                }
+                                                            },
+                                                            "Run_query_and_list_results_4": {
+                                                                "runAfter": {
+                                                                    "Run_query_and_visualize_results": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "body": "let Emailtable = EmailEvents;\nEmailUrlInfo\n| where TimeGenerated >= ago(30d)\n| where UrlDomain contains \"@{outputs('Domain')}\"\n| extend Start = Timestamp\n| extend End = Timestamp\n| join kind=leftouter Emailtable on $left.NetworkMessageId == $right.NetworkMessageId\n| where SenderMailFromAddress == \"@{items('For_each_2')['SenderMailFromAddress']}\"\n| where Subject == \"@{items('For_each_2')['Subject']}\"\n| extend DefenderLink = strcat('<a href=','https://security.microsoft.com/emailentity?startTime=',Start,'&endTime=',End, '&id=', NetworkMessageId, '&recipient=', RecipientEmailAddress,'>Message on Defender 365</a>')\n| distinct SenderMailFromAddress, RecipientEmailAddress, SenderIPv4, Subject, DefenderLink",
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "path": "/queryData",
+                                                                    "queries": {
+                                                                        "resourcegroups": "<resource group>",
+                                                                        "resourcename": "<resource name>",
+                                                                        "resourcetype": "Log Analytics Workspace",
+                                                                        "subscriptions": "<subscription id>",
+                                                                        "timerange": "Set in query"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Run_query_and_visualize_results": {
+                                                                "runAfter": {},
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "body": "let Emailtable = EmailEvents;\nEmailUrlInfo\n| where TimeGenerated >= ago(30d)\n| where UrlDomain contains \"@{outputs('Domain')}\"\n| extend Start = Timestamp\n| extend End = Timestamp\n| join kind=leftouter Emailtable on $left.NetworkMessageId == $right.NetworkMessageId\n| where SenderMailFromAddress == \"@{items('For_each_2')['SenderMailFromAddress']}\"\n| where Subject == \"@{items('For_each_2')['Subject']}\"\n| extend DefenderLink = strcat('<a href=','https://security.microsoft.com/emailentity?startTime=',Start,'&endTime=',End, '&id=', NetworkMessageId, '&recipient=', RecipientEmailAddress,'>Message on Defender 365</a>')\n| project TimeGenerated, SenderMailFromAddress, RecipientEmailAddress, SenderIPv4, Subject, DefenderLink\n| render table ",
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "path": "/visualizeQuery",
+                                                                    "queries": {
+                                                                        "resourcegroups": "<resource group>",
+                                                                        "resourcename": "<resource name>",
+                                                                        "resourcetype": "Log Analytics Workspace",
+                                                                        "subscriptions": "<subscription id>",
+                                                                        "timerange": "Set in query",
+                                                                        "visType": "Html Table"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Send_an_email_(V2)": {
+                                                                "runAfter": {
+                                                                    "Compose_5": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "body": {
+                                                                        "Body": "<p>@{outputs('Compose_4')}<br>\n@{outputs('Compose')}</p>",
+                                                                        "Subject": "[Incident Id: @{triggerBody()?['object']?['properties']?['incidentNumber']}] Cisco Umbrella - Malicious activity: @{outputs('Broken_Domain')}",
+                                                                        "To": "@variables('SOC Team Mailbox')"
+                                                                    },
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "path": "/v2/Mail"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "Foreach"
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Run_query_and_list_results_3": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Condition_6": {
+                                                            "actions": {
+                                                                "Update_incident_3": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "classification": {
+                                                                                "ClassificationAndReason": "BenignPositive - SuspiciousButExpected",
+                                                                                "ClassificationReasonText": "No threats were found from investigation, no mails were found with the domain @{outputs('Broken_Domain')}"
+                                                                            },
+                                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                            "ownerAction": "Unassign",
+                                                                            "severity": "Low",
+                                                                            "status": "Closed"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "path": "/Incidents"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Send_email_with_options_2": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@body('Send_email_with_options_2')?['SelectedOption']",
+                                                                            "Close Incident"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Send_email_with_options_2": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnectionWebhook",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "Message": {
+                                                                        "Body": "<html>\n<body>\n<p>\nHi,<br><br>\n\nNo mails were found with the following Domain:\n<li><b>@{outputs('Broken_Domain')}</b></li><br><br>\n\n\nBest regards,<br><br>\n<b style='color:red'@{variables('Comapny Logo')}Security Operations Center (SOC) Team</b><br>\n</p>\n</body>\n</html>",
+                                                                        "HeaderText": "This alert require your attention ",
+                                                                        "HideHTMLMessage": false,
+                                                                        "Importance": "Normal",
+                                                                        "Options": "Close Incident, Acknowledge",
+                                                                        "SelectionText": "Pleae choose one of the following options below",
+                                                                        "ShowHTMLConfirmationDialog": false,
+                                                                        "Subject": "[Incident Id: @{triggerBody()?['object']?['properties']?['incidentNumber']}] Cisco Umbrella - Malicious activity: @{outputs('Broken_Domain')}",
+                                                                        "To": "@variables('SOC Team Mailbox')",
+                                                                        "UseOnlyHTMLMessage": true
+                                                                    },
+                                                                    "NotificationUrl": "@{listCallbackUrl()}"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "path": "/mailwithoptions/$subscriptions"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "greater": [
+                                                                "@length(outputs('Run_query_and_list_results_3')['body']['value'])",
+                                                                0
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "Run_query_and_list_results_3": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": "let Emailtable = EmailEvents;\nEmailUrlInfo\n| where TimeGenerated >= ago(30d)\n| where UrlDomain contains \"@{outputs('Domain')}\"\n| extend Start = Timestamp\n| extend End = Timestamp\n| join kind=leftouter Emailtable on $left.NetworkMessageId == $right.NetworkMessageId\n| extend DefenderLink = strcat('https://security.microsoft.com/emailentity?startTime=',Start,'&endTime=',End, '&id=', NetworkMessageId, '&recipient=', RecipientEmailAddress)\n| distinct SenderMailFromAddress, Subject, NetworkMessageId, InternetMessageId",
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/queryData",
+                                                    "queries": {
+                                                        "resourcegroups": "<resource group>",
+                                                        "resourcename": "<resource name>",
+                                                        "resourcetype": "Log Analytics Workspace",
+                                                        "subscriptions": "<subscription id>",
+                                                        "timerange": "Set in query"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "expression": {
+                                            "and": [
+                                                {
+                                                    "equals": [
+                                                        "@body('Send_email_with_options')?['SelectedOption']",
+                                                        "Check Email Events"
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "type": "If"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "",
+                                            "Close Incident"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_3": {
+                            "actions": {
+                                "Analyse_an_URL": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "$content-type": "multipart/form-data",
+                                            "$multipart": [
+                                                {
+                                                    "body": "@{outputs('Domain')}",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"url\""
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/v3/urls"
+                                    }
+                                },
+                                "Retrieve_information_about_a_file_or_URL_analysis": {
+                                    "runAfter": {
+                                        "Analyse_an_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/v3/analyses/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Retrieve_information_about_a_file_or_URL_analysis": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "VTScore",
+                                        "value": "@{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Actions_-_Start_automated_investigation_on_a_machine": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('VTScore')",
+                                            ""
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Create_CSV_table": {
+                            "runAfter": {
+                                "Advanced_Hunting": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "CSV",
+                                "from": "@body('Advanced_Hunting')?['Results']"
+                            }
+                        },
+                        "Domain": {
+                            "runAfter": {
+                                "Source_IP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@trigger()['outputs']['body']['object']['properties']['relatedEntities'][1]['properties']['url']"
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@trigger()['Outputs']['body']['object']['properties']['alerts'][0]['properties']['additionalData']['Custom Details']",
+                                "schema": {
+                                    "properties": {
+                                        "InternalIPs": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "VTLink": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "VTScore": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "Verdict": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Recipients": {
+                            "runAfter": {
+                                "Company_Domain": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Recipients",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results": {
+                            "runAfter": {
+                                "Run_query_and_list_results_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "DeviceNetworkEvents\n| where TimeGenerated >= ago(7d)\n| where LocalIP == \"@{outputs('Source_IP')}\"\n| take 100\n| extend DeviceName = tostring(parse_json(split(DeviceName,'.@{variables('Company Domain')}')[0]))\n| distinct DeviceName, DeviceId",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "<resource group>",
+                                    "resourcename": "<resource name>",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "<subscription id>",
+                                    "timerange": "Set in query"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_2": {
+                            "runAfter": {
+                                "Broken_Domain": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "CommonSecurityLog\n| where TimeGenerated >= ago(14d)\n| where DeviceVendor == \"Palo Alto Networks\"\n| where isnotempty(RequestURL)\n| where FlexString2 == \"client-to-server\"\n| where RequestURL contains \"@{outputs('Domain')}\"\n| where SourceIP == \"@{outputs('Source_IP')}\"\n| extend RequestURL = iff(RequestURL startswith \"\"\"\", replace_string(RequestURL,'\"',''),RequestURL)\n| distinct SourceIP, DestinationIP, RequestURL, DeviceAction\n| take 1",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "<resource group>",
+                                    "resourcename": "<resource name>",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "<subscription id>",
+                                    "timerange": "Set in query"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_5": {
+                            "runAfter": {
+                                "Condition_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "CommonSecurityLog\n| where TimeGenerated >= ago(30d)\n| where DeviceVendor == \"Palo Alto Networks\"\n| where isnotempty(RequestURL)\n| where RequestURL contains \"@{outputs('Run_query_and_list_results_2')['body']['value'][0]['RequestURL']}\"\n| extend RequestURL = iff(RequestURL startswith \"\"\"\", replace_string(RequestURL,'\"',''),RequestURL)\n| summarize arg_min(TimeGenerated, *)\n| project TimeGenerated",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "<resource group>",
+                                    "resourcename": "<resource name>",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "<subscription id>",
+                                    "timerange": "Set in query"
+                                }
+                            },
+                            "description": "Event Time for Advanced Hunting query"
+                        },
+                        "SOC_Team_Mailbox": {
+                            "runAfter": {
+                                "VTLink": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SOC Team Mailbox",
+                                        "type": "string",
+                                        "value": "***Add your SOC Team Mailbox here***"
+                                    }
+                                ]
+                            }
+                        },
+                        "Send_email_with_options": {
+                            "runAfter": {
+                                "Create_CSV_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "Message": {
+                                        "Attachments": [
+                                            {
+                                                "ContentBytes": "@{base64(body('Create_CSV_table'))}",
+                                                "Name": "Advanced Hunting - Related Events.csv"
+                                            }
+                                        ],
+                                        "Body": "<html>\n<body>\n<p>\nHi,<br><br>\n\nThe following connection attempt was made following the detection of DNS request for malicious URL by Cisco Umbrella: <br>\n<li><b>Date</b>: @{formatDateTime(outputs('Run_query_and_list_results_5')['body']['value'][0]['TimeGenerated'], 'yyyy-MM-dd')}</li><br><br>\n<li><b>Time</b>: @{formatDateTime(outputs('Run_query_and_list_results_5')['body']['value'][0]['TimeGenerated']\r\n, 'HH:mm:ss')}</li><br><br>\n<li><b>Device</b>: @{outputs('Run_query_and_list_results')['body']['value'][0]['DeviceName']}</li><br><br>\n<li><b>Source IP</b>: @{outputs('Source_IP')}</li><br><br>\n<li><b>Domain</b>: @{outputs('Broken_Domain')}</li><br><br>\n<li><b>Request URL</b>: @{outputs('Broken_RequestURL')} </li><br><br>\n<li><b>Destination IP</b>: @{outputs('Run_query_and_list_results_2')['body']['value'][0]['DestinationIP']}</li><br><br>\n<li><b>Device Action</b>: @{outputs('Run_query_and_list_results_2')['body']['value'][0]['DeviceAction']}</li><br><br>\n@{if(empty(outputs('VTLink')),null,concat('<li><b>','VTLink','</b>'))}@{if(empty(outputs('VTLink')),null,concat(': ','</li>'))} @{if(empty(outputs('VTLink')),null,concat('<a href=',outputs('VTLink'),'>VirusTotal</a>'))}<br><br>\n@{if(empty(variables('VTScore')),null,concat('<li><b>','VTScore','</b>'))}@{if(empty(variables('VTScore')),null,concat(': ','</li>'))} @{if(empty(variables('VTScore')),null,variables('VTScore'))}<br><br>\n\n\n\nAn automated investigation initiated on the device.<br>\nPlease see attached CSV Advanced Hunting file for related events. <br><br>\n\nBest regards,<br><br>\n<b style='color:red'@{variables('Comapny Logo')}Security Operations Center (SOC) Team</b><br>\n</p>\n</body>\n</html>",
+                                        "HeaderText": "This alert require your attention ",
+                                        "HideHTMLMessage": false,
+                                        "Importance": "Normal",
+                                        "Options": "Close Incident, Acknowledge, Check Email Events",
+                                        "SelectionText": "Pleae choose one of the following options below",
+                                        "ShowHTMLConfirmationDialog": false,
+                                        "Subject": "[Incident Id: @{triggerBody()?['object']?['properties']?['incidentNumber']}] Cisco Umbrella - Malicious activity: @{outputs('Broken_Domain')}",
+                                        "To": "@variables('SOC Team Mailbox')",
+                                        "UseOnlyHTMLMessage": true
+                                    },
+                                    "NotificationUrl": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "path": "/mailwithoptions/$subscriptions"
+                            }
+                        },
+                        "Source_IP": {
+                            "runAfter": {
+                                "Comapny_Logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@trigger()['outputs']['body']['object']['properties']['relatedEntities'][0]['properties']['address']"
+                        },
+                        "VTLink": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@if(contains(outputs('Parse_JSON')['body'],'VTLink'),outputs('Parse_JSON')['body']['VTLink'][0],null)"
+                        },
+                        "VTScore": {
+                            "runAfter": {
+                                "Recipients": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "VTScore",
+                                        "type": "string",
+                                        "value": "@{if(contains(outputs('Parse_JSON')['body'],'VTScore'),outputs('Parse_JSON')['body']['VTScore'][0],null)}"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[parameters('connections_azuremonitorlogs_2_externalid')]",
+                                "connectionName": "azuremonitorlogs-2",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/eastus/managedApis/azuremonitorlogs"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[parameters('connections_azuresentinel_2_externalid')]",
+                                "connectionName": "azuresentinel-2",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/eastus/managedApis/azuresentinel"
+                            },
+                            "office365": {
+                                "connectionId": "[parameters('connections_office365_11_externalid')]",
+                                "connectionName": "office365-11",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/eastus/managedApis/office365"
+                            },
+                            "teams": {
+                                "connectionId": "[parameters('connections_teams_externalid')]",
+                                "connectionName": "teams",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/eastus/managedApis/teams"
+                            },
+                            "virustotal": {
+                                "connectionId": "[parameters('connections_virustotal_externalid')]",
+                                "connectionName": "virustotal",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/eastus/managedApis/virustotal"
+                            },
+                            "wdatp": {
+                                "connectionId": "[parameters('connections_wdatp_1_externalid')]",
+                                "connectionName": "wdatp-1",
+                                "id": "/subscriptions/<subscription id>/providers/Microsoft.Web/locations/eastus/managedApis/wdatp"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
