@@ -70,3 +70,8 @@ In addition to performing automated investigation and alert enrichment functions
 
 [GitHub Repository](https://github.com/varonissoc/CiscoUmbrellaSuspiciousConnection)
 
+1) Import the Analytics Rule JSON file into your Azure Sentinel Workspace
+2) Import the CiscoUmbrellaGetDataToSentinel Azure deployment template JSON file into your Azure Sentinel Workspace (You will need to enter your ids for your principle, tenant, subscription, workspace, and resource group)
+3) Import the CiscoUmbrellaSuspiciousConnection Azure deployment template JSON file into your Azure Sentinel Workspace (You will need to enter your ids for your principle, tenant, subscription, workspace, and resource group)
+4) Configure your variables in each playbook accordingly (API keys, company logo, etc.)
+
