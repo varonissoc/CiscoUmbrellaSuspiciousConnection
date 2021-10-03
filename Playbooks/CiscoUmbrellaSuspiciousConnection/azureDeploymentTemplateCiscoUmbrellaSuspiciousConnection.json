@@ -912,8 +912,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "CommonSecurityLog\n| where TimeGenerated >= ago(14d)\n| where DeviceVendor == \"Palo Alto Networks\"\n| where isnotempty(RequestURL)\n| where FlexString2 == \"client-to-server\"\n| where RequestURL contains \"@{outputs('Domain')}\"\n| where SourceIP == \"@{outputs('Source_IP')}\"\n| extend RequestURL = iff(RequestURL startswith \"\"\"\", replace_string(RequestURL,'\"',''),RequestURL)\n| distinct SourceIP, DestinationIP, RequestURL, DeviceAction\n| take 1",
-                                "host": {
+                                "body": "FW_Solution_CL\n| where TimeGenerated >= ago(14d)\n| where isnotempty(RequestURL)\n| where RequestURL contains \"@{outputs('Domain')}\"\n| where SourceIP == \"@{outputs('Source_IP')}\"\n| extend RequestURL = iff(RequestURL startswith \"\"\"\", replace_string(RequestURL,'\"',''),RequestURL)\n| distinct SourceIP, DestinationIP, RequestURL, DeviceAction\n| take 1",                                "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
                                     }
@@ -937,8 +936,8 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "CommonSecurityLog\n| where TimeGenerated >= ago(30d)\n| where DeviceVendor == \"Palo Alto Networks\"\n| where isnotempty(RequestURL)\n| where RequestURL contains \"@{outputs('Run_query_and_list_results_2')['body']['value'][0]['RequestURL']}\"\n| extend RequestURL = iff(RequestURL startswith \"\"\"\", replace_string(RequestURL,'\"',''),RequestURL)\n| summarize arg_min(TimeGenerated, *)\n| project TimeGenerated",
-                                "host": {
+
+                                "body": "FW_Solution_CL\n| where TimeGenerated >= ago(30d)\n| where isnotempty(RequestURL)\n| where RequestURL contains \"@{outputs('Run_query_and_list_results_2')['body']['value'][0]['RequestURL']}\"\n| extend RequestURL = iff(RequestURL startswith \"\"\"\", replace_string(RequestURL,'\"',''),RequestURL)\n| summarize arg_min(TimeGenerated, *)\n| project TimeGenerated",                                "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
                                     }
