@@ -3,10 +3,10 @@ Sentinel Hackathon 2021 submission. Cisco Umbrella and Azure Sentinel integratio
 
 ## Inspiration
 
-* Desire to protect our network in the face of rising of ransomware and malware attacks.
-* Challenges associated with incident triage and alert fatigue.
-* Challenges balancing incident response with other projects and tasks in a small team.
-* Reducing incident response times for potential critical incidents.
+* Desire to protect our network in the face of rising of ransomware and malware attacks
+* Challenges associated with incident triage and alert fatigue
+* Challenges balancing incident response with other projects and tasks in a small team
+* Reducing incident response times for potential critical incidents
 
 ## What it does
 
@@ -23,37 +23,37 @@ In addition to performing automated investigation and alert enrichment functions
 
 ## How we built it
 
-* Built playbook to ingest Cisco Umbrella threat logs to Azure Log Analytics.
-* Wrote analytics rule to detect suspicious network connections from Cisco Umbrella threat logs.
-* Built playbook to automate investigation, enrichment, notification, containment, and eradication procedures.
+* Built playbook to ingest Cisco Umbrella threat logs to Azure Log Analytics
+* Wrote analytics rule to detect suspicious network connections from Cisco Umbrella threat logs
+* Built playbook to automate investigation, enrichment, notification, containment, and eradication procedures
 
 ## Challenges we ran into
 
-* Building efficient streamlined processes to reduce playbook runtime and speed results.
-* API call limits for free tier APIs. As we are working on multiple proof-of-concept projects we utilize several free tier open-source APIs which occasionally causes us to reach daily or rate limits.
+* Building efficient streamlined processes to reduce playbook runtime and speed results
+* API call limits for free tier APIs. As we are working on multiple proof-of-concept projects we utilize several free tier open-source APIs which occasionally causes us to reach daily or rate limits
 
 ## Accomplishements that we're proud of
 
-* Notification of potential critical incidents in real-time.
-* Streamlines incident response procedures.
-* Reduced total time for incident response.
-* Enables analyst to take action from anywhere at anytime.
+* Notification of potential critical incidents in real-time
+* Streamlines incident response procedures
+* Reduced total time for incident response
+* Enables analyst to take action from anywhere at anytime
 
 ## What we learned
 
-* Most if not all incident triage can be automated.
-* Automated alert enrichment reduces total investigation time.
-* Most investigation steps can be automated.
-* Automated and semi-automated (with human decision) remediation measures reduce response cycle duration and potential for lateral movement.
+* Most if not all incident triage can be automated
+* Automated alert enrichment reduces total investigation time
+* Most investigation steps can be automated
+* Automated and semi-automated (with human decision) remediation measures reduce response cycle duration and potential for lateral movement
 * When using free tiered APIs it is good to evaluate all playbooks to find overlap in functionality and either remove steps from one or combine playbooks when possible
 
 ## What's next
 
 * We are building an ultimate incident management playbook to automate most incident response processes
-  - Uses multiple sources for alert enrichment and IOC checks.
-  - Advanced hunting queries to check attack vectors and IOCs.
-  - Automated escalation and notification via Teams channels for potential critical incidents.
-  - Combination of automated and semi-automated containment, eradication, and recovery procedures (blacklisting, updating IOCs in systems, network isolation, etc.).
+  - Uses multiple sources for alert enrichment and IOC checks
+  - Advanced hunting queries to check attack vectors and IOCs
+  - Automated escalation and notification via Teams channels for potential critical incidents
+  - Combination of automated and semi-automated containment, eradication, and recovery procedures (blacklisting, updating IOCs in systems, network isolation, etc.)
   
  ## Built With
  
