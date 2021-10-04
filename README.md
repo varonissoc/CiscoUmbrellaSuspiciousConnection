@@ -64,7 +64,7 @@ In addition to performing automated investigation and alert enrichment functions
 
 ## Video Tutorial
 
-[Azure Sentinel Hackathon 2021 Submission Video](YouTube link here)
+[Azure Sentinel Hackathon 2021 Submission Video](https://www.youtube.com/watch?v=XaHI7YnMSOw)
 
 ## Try it out
 
